@@ -22,6 +22,9 @@ from ppcls.utils import profiler
 def train_epoch(engine, epoch_id, print_batch_step):
     tic = time.time()
     v_current = [int(i) for i in paddle.__version__.split(".")]
+    # 修改1：训练迭代开始前，创建Profiler，设置timer_only=True
+    # prof = paddle.profiler.Profiler(timer_only=True)
+    # prof.start()
     for iter_id, batch in enumerate(engine.train_dataloader):
         if iter_id >= engine.max_iter:
             break
@@ -70,10 +73,22 @@ def train_epoch(engine, epoch_id, print_batch_step):
         update_metric(engine, out, batch, batch_size)
         # update_loss_for_logger
         update_loss(engine, loss_dict, batch_size)
+        # 修改2：参考原始模型记录batch_cost的地方，调用step接口，设置num_samples为当前step的BatchSize，将记录本次迭代的开销
+        # prof.step(num_samples=batch_size)
         engine.time_info["batch_cost"].update(time.time() - tic)
+
+        if iter_id > 0 and iter_id % 65 == 0:
+            engine.eval()
+
         if iter_id % print_batch_step == 0:
             log_info(engine, batch_size, epoch_id, iter_id)
+            # step_info = prof.step_info(unit='samples')
+            # print("[Train] Iter {}: {}".format(iter_id, step_info))
+            # 修改3：打印使用工具计时的结果，注意unit参数的设置，比如原始log中是images/s，这里unit就是images
+            # print("================== timer =================:" + prof.step_info(unit='samples'))
         tic = time.time()
+    # # 修改4：在循环退出后，停止计时
+    # prof.stop()
 
 
 def forward(engine, batch):

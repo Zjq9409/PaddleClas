@@ -40,6 +40,9 @@ def classification_eval(engine, epoch_id=0):
         dataset) if not engine.use_dali else engine.eval_dataloader.size
     max_iter = len(engine.eval_dataloader) - 1 if platform.system(
     ) == "Windows" else len(engine.eval_dataloader)
+    # # 修改1：训练迭代开始前，创建Profiler，设置timer_only=True
+    # prof = paddle.profiler.Profiler(timer_only=True)
+    # prof.start()
     for iter_id, batch in enumerate(engine.eval_dataloader):
         if iter_id >= max_iter:
             break
@@ -136,7 +139,9 @@ def classification_eval(engine, epoch_id=0):
 
                 output_info[key].update(metric_dict[key].numpy()[0],
                                         current_samples)
-
+        
+        #  # 修改2：参考原始模型记录batch_cost的地方，调用step接口，设置num_samples为当前step的BatchSize，将记录本次迭代的开销
+        # prof.step(num_samples=batch_size)
         time_info["batch_cost"].update(time.time() - tic)
 
         if iter_id % print_batch_step == 0:
@@ -152,11 +157,16 @@ def classification_eval(engine, epoch_id=0):
                 "{}: {:.5f}".format(key, output_info[key].val)
                 for key in output_info
             ])
+            # step_info = prof.step_info(unit='samples')
+            # print("[Eval] Iter {}: {}".format(iter_id, step_info))
             logger.info("[Eval][Epoch {}][Iter: {}/{}]{}, {}, {}".format(
                 epoch_id, iter_id,
                 len(engine.eval_dataloader), metric_msg, time_msg, ips_msg))
 
         tic = time.time()
+    # # 修改4：在循环退出后，停止计时
+    # prof.stop()
+
     if engine.use_dali:
         engine.eval_dataloader.reset()
     metric_msg = ", ".join([
